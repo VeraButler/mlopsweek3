@@ -159,6 +159,10 @@ CONTAINER ID   IMAGE                COMMAND                  CREATED         STA
 docker container stop <container-id>
 ``` 
 
+> example
+
+![Docker Container Setup](images/Docker_Setup.png)
+
 5. Test the Docker container with an example request:
 
 Option 1: Using the web browser: Visit `http://0.0.0.0/docs` and follow the same guidelines as above.
@@ -205,6 +209,10 @@ $ docker exec -it <container id> /bin/sh
 
 $ tail -f ../data/logs.out
 ```
+
+> example
+
+![Docker Container Running Classifier](images/Docker_Container_Running_Classifier.png)
 
 4. Now when you send any request to the web server (from the browser, or another tab in the command line), you can see the log output coming through in `logs.out`. Test the web server with these requests and make sure you can see the outputs in `logs.out`:
 
