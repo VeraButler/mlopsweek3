@@ -134,14 +134,32 @@ $ curl -X 'POST' \
 $ docker build --platform linux/amd64 -t news-classifier .
 ```
 
-2. Start the container:
+2. Start the container in detached mode:
 
 ```bash
 
-$ docker run -p 80:80 news-classifier-w3
+$ docker run -d -p 80:80 news-classifier
 ```
 
-3. Test the Docker container with an example request:
+3. Find out the container id of the running container:
+```bash
+$ docker ps
+```
+
+This will return a response like the following:
+```bash
+
+CONTAINER ID   IMAGE                COMMAND                  CREATED         STATUS         PORTS                NAMES
+3a45c7f7661c   news-classifier-w3   "uvicorn server:app …"   4 minutes ago   Up 4 minutes   0.0.0.0:80->80/tcp   happy_burnell
+```
+
+4. Stop docker:
+```bash
+
+docker container stop <container-id>
+``` 
+
+5. Test the Docker container with an example request:
 
 Option 1: Using the web browser: Visit `http://0.0.0.0/docs` and follow the same guidelines as above.
 
