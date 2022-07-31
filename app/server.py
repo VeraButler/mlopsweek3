@@ -60,23 +60,25 @@ class TransformerFeaturizer(BaseEstimator, TransformerMixin):
 class NewsCategoryClassifier:
     def __init__(self, config: dict) -> None:
         self.config = config
-        # TODO: Labels are in correct order or not?
-        self.labels = ['Business', 'Sci/Tech', 'Software and Developement',
-                        'Entertainment', 'Sports', 'Health', 'Toons', 'Music Feeds']
         """
         [TO BE IMPLEMENTED]
         1. Load the sentence transformer model and initialize the `featurizer` of type `TransformerFeaturizer` (Hint: revisit Week 1 Step 4)
         2. Load the serialized model as defined in GLOBAL_CONFIG['model'] into memory and initialize `model`
         """
+
         featurizer = TransformerFeaturizer(
             dim = self.config["model"]["featurizer"]["sentence_transformer_embedding_dim"],
             sentence_transformer_model = SentenceTransformer(self.config["model"]["featurizer"]["sentence_transformer_model"])
             )
+
         model = joblib.load(self.config["model"]["classifier"]["serialized_model_path"])
+
         self.pipeline = Pipeline([
             ('transformer_featurizer', featurizer),
             ('classifier', model)
         ])
+
+        self.classes = model.classes_ # used in predict_proba
 
     def predict_proba(self, model_input: dict) -> dict:
         """
@@ -93,7 +95,7 @@ class NewsCategoryClassifier:
         }
         """
         y_pred_probs = self.pipeline.predict_proba([model_input])[0] # Input must be iterable
-        return dict(zip(self.labels, y_pred_probs.tolist()))
+        return dict(zip(self.classes, y_pred_probs.tolist()))
 
     def predict_label(self, model_input: dict) -> str:
         """
@@ -111,10 +113,10 @@ class NewsCategoryClassifier:
 app = FastAPI()
 d = {} # Something to hold states/variables in between the events
 
-def write_log(log, input):
-    if log:
-        log.write(input + "\n")
-        log.flush()
+def write_log(log_fp, input):
+    if log_fp:
+        log_fp.write(input + "\n")
+        log_fp.flush()
 
 @app.on_event("startup")
 def startup_event():
@@ -127,8 +129,8 @@ def startup_event():
         store them as global variables
     """
     d["model"] = NewsCategoryClassifier(GLOBAL_CONFIG)
-    d["logger"] = open(GLOBAL_CONFIG['service']['log_destination'], mode="w", encoding="utf-8") # Open Log File
-    write_log(d["logger"], "Setup completed")
+    d["log_fp"] = open(GLOBAL_CONFIG['service']['log_destination'], mode="w", encoding="utf-8") # Open Log File
+    write_log(d["log_fp"], "Setup completed")
     logger.info("Setup completed")
 
 
@@ -141,10 +143,10 @@ def shutdown_event():
         2. Any other cleanups
     """
     
-    write_log(d["logger"], "Shutting down applicaiton")
+    write_log(d["log_fp"], "Shutting down applicaiton")
 
-    if d["logger"]: # Close Log File
-        d["logger"].close()
+    if d["log_fp"]: # Close Log File
+        d["log_fp"].close()
 
     # TODO: What's any other cleanups to do here?
 
@@ -185,7 +187,7 @@ def predict(request: PredictRequest):
             'latency': f"{int(round(end_time - start_time, 4) * 1000)} ms"
         }, indent=4) 
 
-    write_log(d["logger"], response_log)
+    write_log(d["log_fp"], response_log)
 
     logger.info(response_log)
 
