@@ -7,6 +7,12 @@ from sentence_transformers import SentenceTransformer
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
 
+# Additional imports
+from datetime import datetime
+import time
+import json
+
+# Global Variables
 GLOBAL_CONFIG = {
     "model": {
         "featurizer": {
@@ -14,11 +20,11 @@ GLOBAL_CONFIG = {
             "sentence_transformer_embedding_dim": 768
         },
         "classifier": {
-            "serialized_model_path": "./data/news_classifier.joblib"
+            "serialized_model_path": "../data/news_classifier.joblib"
         }
     },
     "service": {
-        "log_destination": "./data/logs.out"
+        "log_destination": "../data/logs.out"
     }
 }
 
@@ -54,13 +60,19 @@ class TransformerFeaturizer(BaseEstimator, TransformerMixin):
 class NewsCategoryClassifier:
     def __init__(self, config: dict) -> None:
         self.config = config
+        # TODO: Labels are in correct order or not?
+        self.labels = ['Business', 'Sci/Tech', 'Software and Developement',
+                        'Entertainment', 'Sports', 'Health', 'Toons', 'Music Feeds']
         """
         [TO BE IMPLEMENTED]
         1. Load the sentence transformer model and initialize the `featurizer` of type `TransformerFeaturizer` (Hint: revisit Week 1 Step 4)
         2. Load the serialized model as defined in GLOBAL_CONFIG['model'] into memory and initialize `model`
         """
-        featurizer = None
-        model = None
+        featurizer = TransformerFeaturizer(
+            dim = self.config["model"]["featurizer"]["sentence_transformer_embedding_dim"],
+            sentence_transformer_model = SentenceTransformer(self.config["model"]["featurizer"]["sentence_transformer_model"])
+            )
+        model = joblib.load(self.config["model"]["classifier"]["serialized_model_path"])
         self.pipeline = Pipeline([
             ('transformer_featurizer', featurizer),
             ('classifier', model)
@@ -80,7 +92,8 @@ class NewsCategoryClassifier:
             ...
         }
         """
-        return {}
+        y_pred_probs = self.pipeline.predict_proba([model_input])[0] # Input must be iterable
+        return dict(zip(self.labels, y_pred_probs.tolist()))
 
     def predict_label(self, model_input: dict) -> str:
         """
@@ -91,10 +104,12 @@ class NewsCategoryClassifier:
 
         Output format: predicted label for the model input
         """
-        return ""
+        label = self.pipeline.predict([model_input])[0] # Input must be iterable
+        return label
 
 
 app = FastAPI()
+d = {} # Something to hold states/variables in between the events
 
 @app.on_event("startup")
 def startup_event():
@@ -106,6 +121,8 @@ def startup_event():
         Access to the model instance and log file will be needed in /predict endpoint, make sure you
         store them as global variables
     """
+    d["model"] = NewsCategoryClassifier(GLOBAL_CONFIG)
+    d["logger"] = open(GLOBAL_CONFIG['service']['log_destination'], mode="w", encoding="utf-8")
     logger.info("Setup completed")
 
 
@@ -117,6 +134,13 @@ def shutdown_event():
         1. Make sure to flush the log file and close any file pointers to avoid corruption
         2. Any other cleanups
     """
+    
+    if d["logger"]:
+        d["logger"].flush()
+        d["logger"].close()
+
+    # TODO: What's any other cleanups to do here?
+
     logger.info("Shutting down application")
 
 
@@ -137,7 +161,27 @@ def predict(request: PredictRequest):
         }
         3. Construct an instance of `PredictResponse` and return
     """
-    return {}
+
+    # Serve the request
+    start_time = time.time() # note time before serving the request 
+    scores = d["model"].predict_proba(request.description)
+    label = d["model"].predict_label(request.description)
+    response = PredictResponse(scores=scores, label=label)
+    end_time = time.time() # note time after the request is serverd
+
+    # Logging the response
+    response_log =  json.dumps({
+            'timestamp':  datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
+            'request': request.dict(),
+            'probabilities': scores,
+            'prediction': label,
+            'latency': end_time - start_time
+        }, indent=4) 
+    logger.info(response_log)
+    d["logger"].write(response_log + ",\n")
+    d["logger"].flush()
+
+    return response
 
 
 @app.get("/")
