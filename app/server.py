@@ -111,6 +111,11 @@ class NewsCategoryClassifier:
 app = FastAPI()
 d = {} # Something to hold states/variables in between the events
 
+def write_log(log, input):
+    if log:
+        log.write(input + "\n")
+        log.flush()
+
 @app.on_event("startup")
 def startup_event():
     """
@@ -122,7 +127,8 @@ def startup_event():
         store them as global variables
     """
     d["model"] = NewsCategoryClassifier(GLOBAL_CONFIG)
-    d["logger"] = open(GLOBAL_CONFIG['service']['log_destination'], mode="w", encoding="utf-8")
+    d["logger"] = open(GLOBAL_CONFIG['service']['log_destination'], mode="w", encoding="utf-8") # Open Log File
+    write_log(d["logger"], "Setup completed")
     logger.info("Setup completed")
 
 
@@ -135,8 +141,9 @@ def shutdown_event():
         2. Any other cleanups
     """
     
-    if d["logger"]:
-        d["logger"].flush()
+    write_log(d["logger"], "Shutting down applicaiton")
+
+    if d["logger"]: # Close Log File
         d["logger"].close()
 
     # TODO: What's any other cleanups to do here?
@@ -173,13 +180,14 @@ def predict(request: PredictRequest):
     response_log =  json.dumps({
             'timestamp':  datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
             'request': request.dict(),
-            'probabilities': scores,
-            'prediction': label,
-            'latency': end_time - start_time
+            'prediction': scores,
+            'output label': label,
+            'latency': f"{int(round(end_time - start_time, 4) * 1000)} ms"
         }, indent=4) 
+
+    write_log(d["logger"], response_log)
+
     logger.info(response_log)
-    d["logger"].write(response_log + ",\n")
-    d["logger"].flush()
 
     return response
 
